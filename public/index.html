@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-4xl">
+        <h1 class="text-4xl font-bold text-center mb-8 text-blue-400">URL Shortener</h1>
+        
+        <!-- URL Shorten Form -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8 shadow-lg">
+            <div class="flex gap-4">
+                <input 
+                    type="url" 
+                    id="urlInput" 
+                    placeholder="https://example.com/uzun-link-buraya" 
+                    class="flex-1 px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                >
+                <button 
+                    id="shortenBtn" 
+                    class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
+                >
+                    Kısalt
+                </button>
+            </div>
+            <p id="errorMsg" class="text-red-400 mt-2 hidden"></p>
+            
+            <!-- Result -->
+            <div id="result" class="mt-4 hidden">
+                <div class="bg-gray-700 rounded-lg p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Kısa Link:</p>
+                        <a id="shortUrl" href="#" target="_blank" class="text-blue-400 hover:text-blue-300 text-lg font-semibold"></a>
+                    </div>
+                    <button 
+                        id="copyBtn" 
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        Kopyala
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Links Table -->
+        <div class="bg-gray-800 rounded-lg p-6 shadow-lg">
+            <h2 class="text-xl font-semibold mb-4 text-gray-200">Son Linkler</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="text-left py-3 px-2 text-gray-400 font-medium">Kod</th>
+                            <th class="text-left py-3 px-2 text-gray-400 font-medium">URL</th>
+                            <th class="text-center py-3 px-2 text-gray-400 font-medium">Tıklama</th>
+                            <th class="text-right py-3 px-2 text-gray-400 font-medium">Tarih</th>
+                        </tr>
+                    </thead>
+                    <tbody id="linksTable">
+                        <tr>
+                            <td colspan="4" class="text-center py-8 text-gray-500">Yükleniyor...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById('urlInput');
+        const shortenBtn = document.getElementById('shortenBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const result = document.getElementById('result');
+        const shortUrlEl = document.getElementById('shortUrl');
+        const copyBtn = document.getElementById('copyBtn');
+        const linksTable = document.getElementById('linksTable');
+
+        // Shorten URL
+        shortenBtn.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showError('Lütfen bir URL girin');
+                return;
+            }
+
+            try {
+                errorMsg.classList.add('hidden');
+                shortenBtn.disabled = true;
+                shortenBtn.textContent = 'Kısaltılıyor...';
+
+                const response = await fetch('/api/shorten', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Bir hata oluştu');
+                }
+
+                shortUrlEl.textContent = data.shortUrl;
+                shortUrlEl.href = data.shortUrl;
+                result.classList.remove('hidden');
+                urlInput.value = '';
+                
+                // Refresh links table
+                loadLinks();
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                shortenBtn.disabled = false;
+                shortenBtn.textContent = 'Kısalt';
+            }
+        });
+
+        // Copy to clipboard
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(shortUrlEl.textContent);
+                copyBtn.textContent = 'Kopyalandı!';
+                copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                copyBtn.classList.add('bg-gray-600');
+                
+                setTimeout(() => {
+                    copyBtn.textContent = 'Kopyala';
+                    copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    copyBtn.classList.remove('bg-gray-600');
+                }, 2000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+            }
+        });
+
+        // Load recent links
+        async function loadLinks() {
+            try {
+                const response = await fetch('/api/links');
+                const links = await response.json();
+                
+                if (links.length === 0) {
+                    linksTable.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">Henüz link yok</td></tr>';
+                    return;
+                }
+
+                // Show only last 10
+                const recentLinks = links.slice(0, 10);
+                
+                linksTable.innerHTML = recentLinks.map(link => {
+                    const shortUrl = `${window.location.origin}/${link.code}`;
+                    const displayUrl = link.url.length > 50 ? link.url.substring(0, 50) + '...' : link.url;
+                    const date = new Date(link.created_at).toLocaleDateString('tr-TR');
+                    
+                    return `
+                        <tr class="border-b border-gray-700 hover:bg-gray-750">
+                            <td class="py-3 px-2">
+                                <a href="/${link.code}" target="_blank" class="text-blue-400 hover:text-blue-300 font-mono">${link.code}</a>
+                            </td>
+                            <td class="py-3 px-2">
+                                <a href="${link.url}" target="_blank" class="text-gray-300 hover:text-white" title="${link.url}">${displayUrl}</a>
+                            </td>
+                            <td class="py-3 px-2 text-center text-gray-400">${link.clicks}</td>
+                            <td class="py-3 px-2 text-right text-gray-400 text-sm">${date}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading links:', err);
+                linksTable.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-red-400">Linkler yüklenemedi</td></tr>';
+            }
+        }
+
+        function showError(message) {
+            errorMsg.textContent = message;
+            errorMsg.classList.remove('hidden');
+        }
+
+        // Enter key support
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                shortenBtn.click();
+            }
+        });
+
+        // Load links on page load
+        loadLinks();
+        
+        // Refresh every 30 seconds
+        setInterval(loadLinks, 30000);
+    </script>
+</body>
+</html>
