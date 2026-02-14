@@ -1,12 +1,20 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import pool from './db';
 
 const app = express();
 const PORT = process.env.PORT || 3510;
+
+// Validate BASE_URL in production
+if (!process.env.BASE_URL && process.env.NODE_ENV === 'production') {
+  throw new Error('BASE_URL environment variable is required in production');
+}
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3510';
 
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -26,15 +34,35 @@ app.post('/api/shorten', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
-    const code = nanoid(6);
-    
-    const result = await pool.query(
-      'INSERT INTO short_links (code, url) VALUES ($1, $2) RETURNING code',
-      [code, url]
-    );
+    // Generate unique code with retries
+    let code: string;
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    const shortUrl = `${BASE_URL}/${result.rows[0].code}`;
-    res.json({ code: result.rows[0].code, shortUrl });
+    while (attempts < maxAttempts) {
+      code = nanoid(10); // Increased from 6 to 10 for production safety
+      
+      try {
+        const result = await pool.query(
+          'INSERT INTO short_links (code, url) VALUES ($1, $2) RETURNING code',
+          [code, url]
+        );
+
+        const shortUrl = `${BASE_URL}/${result.rows[0].code}`;
+        return res.json({ code: result.rows[0].code, shortUrl });
+      } catch (error: any) {
+        // PostgreSQL unique constraint violation error code
+        if (error.code === '23505') {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            return res.status(500).json({ error: 'Failed to generate unique code after multiple attempts' });
+          }
+          continue; // Retry with new code
+        }
+        // Other errors - rethrow
+        throw error;
+      }
+    }
   } catch (error) {
     console.error('Error creating short URL:', error);
     res.status(500).json({ error: 'Internal server error' });

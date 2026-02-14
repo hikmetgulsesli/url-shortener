@@ -3,13 +3,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("dotenv/config");
 const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 const nanoid_1 = require("nanoid");
 const db_1 = __importDefault(require("./db"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3510;
+// Validate BASE_URL in production
+if (!process.env.BASE_URL && process.env.NODE_ENV === 'production') {
+    throw new Error('BASE_URL environment variable is required in production');
+}
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3510';
+app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));
 // POST /api/shorten - Create short URL
@@ -26,10 +33,30 @@ app.post('/api/shorten', async (req, res) => {
         catch {
             return res.status(400).json({ error: 'Invalid URL format' });
         }
-        const code = (0, nanoid_1.nanoid)(6);
-        const result = await db_1.default.query('INSERT INTO short_links (code, url) VALUES ($1, $2) RETURNING code', [code, url]);
-        const shortUrl = `${BASE_URL}/${result.rows[0].code}`;
-        res.json({ code: result.rows[0].code, shortUrl });
+        // Generate unique code with retries
+        let code;
+        let attempts = 0;
+        const maxAttempts = 5;
+        while (attempts < maxAttempts) {
+            code = (0, nanoid_1.nanoid)(10); // Increased from 6 to 10 for production safety
+            try {
+                const result = await db_1.default.query('INSERT INTO short_links (code, url) VALUES ($1, $2) RETURNING code', [code, url]);
+                const shortUrl = `${BASE_URL}/${result.rows[0].code}`;
+                return res.json({ code: result.rows[0].code, shortUrl });
+            }
+            catch (error) {
+                // PostgreSQL unique constraint violation error code
+                if (error.code === '23505') {
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        return res.status(500).json({ error: 'Failed to generate unique code after multiple attempts' });
+                    }
+                    continue; // Retry with new code
+                }
+                // Other errors - rethrow
+                throw error;
+            }
+        }
     }
     catch (error) {
         console.error('Error creating short URL:', error);
