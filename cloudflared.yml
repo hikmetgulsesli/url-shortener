@@ -1,0 +1,13 @@
+# Cloudflare Tunnel Configuration
+# Run with: cloudflared tunnel --config cloudflared.yml run
+#
+# NOTE: Update credentials-file path before deployment
+# Example: credentials-file: /home/YOUR_USER/.cloudflared/url-shortener-tunnel.json
+
+tunnel: url-shortener-tunnel
+credentials-file: ~/.cloudflared/url-shortener-tunnel.json
+
+ingress:
+  - hostname: link.setrox.com.tr
+    service: http://localhost:3510
+  - service: http_status:404
