@@ -1,0 +1,16 @@
+[Unit]
+Description=URL Shortener Service
+After=network.target
+
+[Service]
+Type=simple
+User=setrox
+WorkingDirectory=/home/setrox/url-shortener
+Environment=NODE_ENV=production
+EnvironmentFile=/home/setrox/url-shortener/.env
+ExecStart=/usr/bin/node /home/setrox/url-shortener/dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
