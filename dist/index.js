@@ -10,12 +10,12 @@ const path_1 = __importDefault(require("path"));
 const nanoid_1 = require("nanoid");
 const db_1 = __importDefault(require("./db"));
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 3510;
+const PORT = process.env.PORT || 3506;
 // Validate BASE_URL in production
 if (!process.env.BASE_URL && process.env.NODE_ENV === 'production') {
     throw new Error('BASE_URL environment variable is required in production');
 }
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3510';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3506';
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.static(path_1.default.join(__dirname, '../public')));

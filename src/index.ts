@@ -6,13 +6,13 @@ import { nanoid } from 'nanoid';
 import pool from './db';
 
 const app = express();
-const PORT = process.env.PORT || 3510;
+const PORT = process.env.PORT || 3506;
 
 // Validate BASE_URL in production
 if (!process.env.BASE_URL && process.env.NODE_ENV === 'production') {
   throw new Error('BASE_URL environment variable is required in production');
 }
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3510';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3506';
 
 app.use(cors());
 app.use(express.json());
